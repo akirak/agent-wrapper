@@ -58,7 +58,9 @@ in
                   ];
                   description = ''
                     Arguments passed to Bubblewrap before the wrapped command.
-                    Arguments beginning with $ have environment variables expanded.
+                    Environment variable references ($NAME or ''${NAME}) anywhere
+                    in each argument are expanded at runtime. Unset variables
+                    expand to an empty string; no shell evaluation is performed.
                   '';
                 };
               }

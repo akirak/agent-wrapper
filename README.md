@@ -170,7 +170,7 @@ bwrap [ARGUMENTS...] COMMAND [ARGS...]
 | --- | --- | --- | --- |
 | `arguments` | array of strings | `[]` | Command-line arguments passed to `bwrap` before `COMMAND`. |
 
-- **Environment variable expansion:** Any argument in `arguments` that begins with `$` (for example, `"$HOME"` or `"${XDG_RUNTIME_DIR}/bus"`) is expanded against the command environment before `bwrap` is invoked. Both `$NAME` and `${NAME}` references are supported; unset variables expand to an empty string. This is variable substitution only, not shell evaluation. Arguments that do not begin with `$` are passed verbatim. Variables defined in `[environment]` are loaded prior to this expansion.
+- **Environment variable expansion:** Environment variables anywhere in `arguments` (for example, `"$HOME/.config/direnv"`, `"${XDG_RUNTIME_DIR}/bus"`, or `"--chdir=$HOME"`) are expanded against the command environment before `bwrap` is invoked. Both `$NAME` and `${NAME}` references are supported; unset variables expand to an empty string. This is variable substitution only, not shell evaluation or word splitting: each string remains one argument, even if an expanded value contains spaces. Variables defined in `[environment]` are loaded prior to this expansion.
 - **Disabling the sandbox:** Omit the `[sandbox.bubblewrap]` section entirely to run the command directly without Bubblewrap.
 - **Other Unix-like platforms:** On Unix-like operating systems other than Linux, `[sandbox.bubblewrap]` is ignored with a warning to `stderr`, and the command is executed without a sandbox.
 

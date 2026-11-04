@@ -247,6 +247,8 @@ let test_expansion () =
   List.iter
     (fun (text, expected) -> equal expected (Environment.expand env text))
     [ ("$HOME", "/home/user")
+    ; ("$HOME/.config/direnv", "/home/user/.config/direnv")
+    ; ("--path=${HOME}/$X", "--path=/home/user/a b")
     ; ("${HOME}/x", "/home/user/x")
     ; ("$MISSING", "")
     ; ("$HOME/$X", "/home/user/a b")
@@ -269,27 +271,36 @@ let test_sandbox () =
       let bwrap = Filename.concat dir "bwrap" in
       write bwrap ("#!" ^ sh ^ "\nexit 0\n") ;
       Unix.chmod bwrap 0o700 ;
-      let env = environment [("PATH", dir); ("AW_HOME", "/home/user")] in
+      let env =
+        environment
+          [("PATH", dir); ("HOME", "/home/user"); ("AW_HOME", "/home/a b")]
+      in
       let config =
         sandbox
           [ "--bind"
           ; "$AW_HOME"
           ; "$AW_HOME"
           ; "--unshare-all"
+          ; "$HOME/.config/direnv"
+          ; "--chdir=${AW_HOME}/$HOME"
           ; "no$expansion"
           ; "${AW_HOME}/x"
-          ; "$MISSING" ]
+          ; "$MISSING"
+          ; "$(echo bad)" ]
       in
       if Platform.system = "linux" then (
         equal
           [ bwrap
           ; "--bind"
-          ; "/home/user"
-          ; "/home/user"
+          ; "/home/a b"
+          ; "/home/a b"
           ; "--unshare-all"
-          ; "no$expansion"
-          ; "/home/user/x"
+          ; "/home/user/.config/direnv"
+          ; "--chdir=/home/a b//home/user"
+          ; "no"
+          ; "/home/a b/x"
           ; ""
+          ; "$(echo bad)"
           ; "claude"
           ; "--verbose" ]
           (Sandbox.build_argv config env "claude" ["--verbose"]) ;
@@ -541,15 +552,16 @@ let test_end_to_end binary () =
                   "PATH = { file = %S }\n\
                    [sandbox.bubblewrap]\n\
                    arguments = [\"--bind\", \"$AW_E2E_TOKEN\", \
-                   \"${AW_E2E_TOKEN}/x\", \"no$expansion\", \
-                   \"$AW_E2E_ABSENT\"]\n"
+                   \"${AW_E2E_TOKEN}/x\", \"prefix-${AW_E2E_TOKEN}/x\", \
+                   \"no$AW_E2E_ABSENT\", \"$AW_E2E_ABSENT\"]\n"
                   path_file ) ;
             assert_execution
               ~output:
                 "<--bind>\n\
                  <e2e-token>\n\
                  <e2e-token/x>\n\
-                 <no$expansion>\n\
+                 <prefix-e2e-token/x>\n\
+                 <no>\n\
                  <>\n\
                  <agent>\n\
                  <--verbose>\n"

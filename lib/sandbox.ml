@@ -19,11 +19,6 @@ let build_argv (config : Config.sandbox) environment command args =
           System.fail "bwrap was configured but is not available: %s" message
       in
       let arguments =
-        List.map
-          (fun arg ->
-            if String.starts_with ~prefix:"$" arg then
-              Environment.expand environment arg
-            else arg )
-          bubblewrap.arguments
+        List.map (Environment.expand environment) bubblewrap.arguments
       in
       bwrap :: (arguments @ (command :: args))
