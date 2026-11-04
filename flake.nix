@@ -55,6 +55,8 @@
 
       overlays.default = import ./nix/overlay.nix self.packages;
 
+      homeManagerModules.default = import ./nix/home-manager.nix self.packages;
+
       checks = eachSystem (
         system: _pkgs: {
           build = self.packages.${system}.default;

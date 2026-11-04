@@ -25,6 +25,36 @@ nix build
 nix profile install github:akirak/agent-wrapper
 ```
 
+### Home Manager
+
+Add `github:akirak/agent-wrapper` as an `agent-wrapper` flake input, then import
+its module in your Home Manager configuration:
+
+```nix
+{
+  imports = [ inputs.agent-wrapper.homeManagerModules.default ];
+
+  programs.agent-wrapper = {
+    enable = true;
+    settings = {
+      preconditions = {
+        check_environment = true;
+        allowed_working_directory_prefixes = [ "/git" ];
+      };
+      environment.ANTHROPIC_API_KEY.file = "/run/secrets/anthropic-api-key";
+    };
+  };
+}
+```
+
+When enabled, the module adds `agent-wrapper` to `home.packages` and writes
+`$XDG_CONFIG_HOME/agent-wrapper/config.toml` (normally
+`~/.config/agent-wrapper/config.toml`). You can override the installed package
+with `programs.agent-wrapper.package`; no overlay is required for the default.
+The generated config is stored in the Nix store, so reference secret files
+rather than including secret values. The module does not automatically wrap
+other commands.
+
 ### OCaml / opam
 
 Building from source requires OCaml 4.13 or newer, Dune 3.11 or newer, and
