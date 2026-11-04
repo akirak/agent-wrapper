@@ -1,75 +1,82 @@
 {
   inputs = {
-    treefmt-nix = {
-      url = "github:numtide/treefmt-nix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    nixpkgs.url = "github:nix-ocaml/nix-overlays";
+    # systems.url = "github:nix-systems/default";
   };
-
-  # Configure a binary cache for your executable(s).
-  # nixConfig = {
-  #   extra-substituters =
-  #     [
-  #     ];
-  #   extra-trusted-public-keys =
-  #     [
-  #     ];
-  # };
 
   outputs =
     {
-      self,
       nixpkgs,
-      treefmt-nix,
+      self,
       ...
     }:
     let
-      inherit (nixpkgs) lib;
       eachSystem =
         f:
-        lib.genAttrs nixpkgs.lib.systems.flakeExposed (system: f system nixpkgs.legacyPackages.${system});
-
-      agentWrapper =
-        pkgs:
-        pkgs.buildGoModule {
-          pname = "agent-wrapper";
-          version = "0.1.0";
-          src = ./.;
-          vendorHash = "sha256-pbA/AlBz3cQYRTMnQ/qBPcinYOKokrBLNhkbRTq54gE=";
-          meta = {
-            description = "Wrapper for coding agent commands with preconditions, a bubblewrap sandbox, and file-based environment variables";
-            mainProgram = "agent-wrapper";
-            license = lib.licenses.mit;
-          };
-        };
-
-      treefmtEval = eachSystem (_system: pkgs: treefmt-nix.lib.evalModule pkgs ./treefmt.nix);
+        nixpkgs.lib.genAttrs nixpkgs.lib.systems.flakeExposed (
+          system:
+          f system (
+            nixpkgs.legacyPackages.${system}.extend (
+              _self: super: {
+                # You can set the OCaml version to a particular release. Also, you
+                # may have to pin some packages to a particular revision if the
+                # devshell fail to build. This should be resolved in the upstream.
+                ocamlPackages = super.ocaml-ng.ocamlPackages_latest;
+              }
+            )
+          )
+        );
     in
     {
       packages = eachSystem (
-        system: pkgs: {
-          agent-wrapper = agentWrapper pkgs;
-          default = agentWrapper pkgs;
-        }
-      );
+        _system: pkgs: with pkgs; {
+          default = ocamlPackages.buildDunePackage {
+            pname = "agent-wrapper";
+            version = "0.1";
+            duneVersion = "3";
+            src = self.outPath;
 
-      devShells = eachSystem (
-        system: pkgs: {
-          default = pkgs.mkShell {
-            packages = [
-              pkgs.go
-              pkgs.gopls
+            buildInputs = with ocamlPackages; [
+              cmdliner
+              otoml
             ];
+            doCheck = true;
+
+            meta = {
+              description = "Safety checks, secret loading, and sandboxing for coding agents";
+              homepage = "https://github.com/akirak/agent-wrapper";
+              license = lib.licenses.mit;
+              platforms = lib.platforms.unix;
+              mainProgram = "agent-wrapper";
+            };
           };
         }
       );
 
-      formatter = eachSystem (system: pkgs: treefmtEval.${system}.config.build.wrapper);
-
       checks = eachSystem (
-        system: pkgs: {
-          treefmt = treefmtEval.${system}.config.build.check self;
+        system: _pkgs: {
+          build = self.packages.${system}.default;
         }
+      );
+
+      formatter = eachSystem (_system: pkgs: pkgs.treefmt.withConfig ./treefmt.nix);
+
+      devShells = eachSystem (
+        system: pkgs:
+        {
+          default = pkgs.mkShell {
+            inputsFrom = [ self.packages.${system}.default ];
+            packages = (
+              with pkgs.ocamlPackages;
+              [
+                ocaml-lsp
+                ocamlformat
+                ocp-indent
+              ]
+            );
+          };
+        }
+        // self.packages.${system}
       );
     };
 }

@@ -1,3 +1,5 @@
-/agent-wrapper
-/agent-wrapper.exe
+/_build/
+/_opam/
+/.direnv/
 /result
+/result-*

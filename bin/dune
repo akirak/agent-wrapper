@@ -1,0 +1,4 @@
+(executable
+ (public_name agent-wrapper)
+ (name main)
+ (libraries agent_wrapper))

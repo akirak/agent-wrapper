@@ -1,0 +1,5 @@
+(test
+ (name test_agent_wrapper)
+ (libraries agent_wrapper unix)
+ (action
+  (run %{test} %{exe:../bin/main.exe})))

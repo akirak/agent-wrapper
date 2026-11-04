@@ -25,10 +25,22 @@ nix build
 nix profile install github:akirak/agent-wrapper
 ```
 
-### Go
+### OCaml / opam
+
+Building from source requires OCaml 4.13 or newer, Dune 3.11 or newer, and
+[Cmdliner](https://erratique.ch/software/cmdliner) and
+[OTOML](https://github.com/dmbaturin/otoml) (installed by opam):
 
 ```bash
-go install github.com/akirak/agent-wrapper@latest
+opam install . --deps-only
+opam exec -- dune build
+opam exec -- dune install
+```
+
+To run without installing:
+
+```bash
+opam exec -- dune exec agent-wrapper -- -f config.toml claude
 ```
 
 If you use the `[sandbox.bubblewrap]` feature on Linux, ensure [`bwrap`](https://github.com/containers/bubblewrap) is installed and available in your `PATH`.
@@ -41,7 +53,12 @@ agent-wrapper [-f CONFIG_FILE] COMMAND [ARGS]...
 
 ### Options
 
-- `-f CONFIG_FILE`: Path to the TOML configuration file. If omitted, `agent-wrapper` reads `$XDG_CONFIG_HOME/agent-wrapper/config.toml` (falling back to `$HOME/.config/agent-wrapper/config.toml` when `XDG_CONFIG_HOME` is unset).
+- `-f CONFIG_FILE`, `--config=CONFIG_FILE`: Path to the TOML configuration file. If omitted, `agent-wrapper` reads `$XDG_CONFIG_HOME/agent-wrapper/config.toml` (falling back to `$HOME/.config/agent-wrapper/config.toml` when `XDG_CONFIG_HOME` is unset or empty).
+- `-h`, `--help`: Show help and exit successfully.
+
+Wrapper options must appear before `COMMAND`. Everything after `COMMAND`,
+including flags such as `--help` and `-f`, is forwarded unchanged. Use `--`
+before `COMMAND` if its name begins with `-`.
 
 ### Examples
 
@@ -123,7 +140,7 @@ bwrap [ARGUMENTS...] COMMAND [ARGS...]
 | --- | --- | --- | --- |
 | `arguments` | array of strings | `[]` | Command-line arguments passed to `bwrap` before `COMMAND`. |
 
-- **Environment variable expansion:** Any argument in `arguments` that begins with `$` (for example, `"$HOME"` or `"${XDG_RUNTIME_DIR}/bus"`) is expanded against the process environment (`os.ExpandEnv`) before `bwrap` is invoked. Arguments that do not begin with `$` are passed verbatim. Variables defined in `[environment]` are loaded prior to this expansion.
+- **Environment variable expansion:** Any argument in `arguments` that begins with `$` (for example, `"$HOME"` or `"${XDG_RUNTIME_DIR}/bus"`) is expanded against the command environment before `bwrap` is invoked. Both `$NAME` and `${NAME}` references are supported; unset variables expand to an empty string. This is variable substitution only, not shell evaluation. Arguments that do not begin with `$` are passed verbatim. Variables defined in `[environment]` are loaded prior to this expansion.
 - **Disabling the sandbox:** Omit the `[sandbox.bubblewrap]` section entirely to run the command directly without Bubblewrap.
 - **Other Unix-like platforms:** On Unix-like operating systems other than Linux, `[sandbox.bubblewrap]` is ignored with a warning to `stderr`, and the command is executed without a sandbox.
 
@@ -133,7 +150,7 @@ On Unix-like systems, `agent-wrapper` replaces its own process with the target c
 
 | Exit code | Meaning |
 | --- | --- |
-| `0` | The wrapped command exited successfully. |
+| `0` | The wrapped command exited successfully, or help was requested. |
 | *N* | The exit status returned by the wrapped command when it fails. |
 | `1` | Configuration error, failed precondition check, environment setup error, or missing `bwrap` binary. |
 | `2` | Invalid command-line flags or missing `COMMAND`. |
@@ -141,16 +158,26 @@ On Unix-like systems, `agent-wrapper` replaces its own process with the target c
 
 ## Development
 
-Run the test suite:
+Enter the development environment and run the tests:
 
 ```bash
-go test ./...
+nix develop
+# Or use your opam environment with the dependencies above installed.
+dune build @all
+dune runtest
 ```
 
-Build with Nix:
+The tests cover configuration validation, preconditions, file-backed environment
+variables, sandbox argument construction, CLI errors, and end-to-end execution
+(including PID, signal, and exit-status preservation). A mock `bwrap` tests
+sandbox argument forwarding without requiring namespaces. Real Bubblewrap is
+also tested when installed and permitted by the host.
+
+Build and test the Nix package:
 
 ```bash
-nix build   # or: nix build .#agent-wrapper
+nix build
+nix flake check
 ```
 
 Format source files:

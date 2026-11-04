@@ -1,7 +1,40 @@
+{ pkgs, ... }:
 {
-  projectRootFile = "treefmt.nix";
+  runtimeInputs = [
+    pkgs.ocamlPackages.ocamlformat
+    pkgs.nixfmt
+    pkgs.zizmor
+  ];
 
-  programs.gofmt.enable = true;
-  programs.zizmor.enable = true;
-  programs.nixfmt.enable = true;
+  settings = {
+    tree-root-file = "dune-project";
+    excludes = [
+      "_build/**"
+      "_opam/**"
+      ".direnv/**"
+      "result/**"
+    ];
+
+    formatter = {
+      ocamlformat = {
+        command = "ocamlformat";
+        options = [ "--inplace" ];
+        includes = [
+          "*.ml"
+          "*.mli"
+        ];
+      };
+      nixfmt = {
+        command = "nixfmt";
+        includes = [ "*.nix" ];
+      };
+      zizmor = {
+        command = "zizmor";
+        includes = [
+          ".github/workflows/*.yml"
+          ".github/workflows/*.yaml"
+        ];
+      };
+    };
+  };
 }

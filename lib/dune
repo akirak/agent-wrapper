@@ -1,0 +1,10 @@
+(library
+ (name agent_wrapper)
+ (libraries unix otoml cmdliner))
+
+; Use the compiler's target OS, not a runtime PATH lookup of uname.
+
+(rule
+ (target platform.ml)
+ (action
+  (write-file %{target} "let system = \"%{system}\"\n")))
