@@ -1,6 +1,6 @@
 packagesForSystems: final: prev:
 let
-  inherit (prev.hostPlatform.stdenv) system;
+  inherit (prev.stdenv.hostPlatform) system;
   inherit (final) lib;
 in
 {
