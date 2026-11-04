@@ -7,15 +7,18 @@
 }:
 {
   config ? null,
+  preamble ? null,
 }:
 package:
 let
   mainProgram = (package.meta or { }).mainProgram or (lib.getName package);
 
   wrappedProgram = writeShellScript mainProgram ''
+    ${lib.optionalString (preamble != null) preamble}
     exec ${lib.getExe agent-wrapper} ${
-      lib.optionalString (config != null)
-        "-f ${lib.escapeShellArg (writers.writeTOML "config.toml" config)}"
+      lib.optionalString (
+        config != null
+      ) "-f ${lib.escapeShellArg (writers.writeTOML "config.toml" config)}"
     } ${lib.escapeShellArg "${package}/bin/${mainProgram}"} "$@"
   '';
 in
