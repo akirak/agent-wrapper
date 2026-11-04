@@ -110,6 +110,37 @@ You can also create shell aliases or wrapper scripts so that invoking your codin
 alias claude='agent-wrapper claude'
 ```
 
+### Nix package wrappers
+
+The Nix overlay exposes `pkgs.agent-wrapper.wrapCommand { config ? null, preamble ? null } package`
+to wrap a package's main program. For example, in a NixOS configuration with
+an `agent-wrapper` flake input available as `inputs`:
+
+```nix
+{
+  nixpkgs.overlays = [ inputs.agent-wrapper.overlays.default ];
+
+  environment.systemPackages = [
+    (pkgs.agent-wrapper.wrapCommand {
+      preamble = ''
+        export PATH="${pkgs.ripgrep}/bin:$PATH"
+      '';
+    } pkgs.claude-code)
+  ];
+}
+```
+
+- `preamble`: Optional shell script string, defaulting to `null` (no setup).
+  Runs on every invocation before `agent-wrapper` starts, including before its
+  precondition checks, secret loading, and sandbox setup. Use it to export
+  environment variables or perform other setup; it runs **outside** the sandbox.
+- `config`: Optional attribute set serialized to TOML and passed to
+  `agent-wrapper` with `-f`. When `null` (the default), the normal configuration
+  file lookup applies.
+
+Both the preamble and any supplied configuration are stored in the Nix store;
+do not embed secrets directly in them.
+
 ## Configuration
 
 By default, configuration is read from `$XDG_CONFIG_HOME/agent-wrapper/config.toml`.
