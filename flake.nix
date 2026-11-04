@@ -53,6 +53,8 @@
         }
       );
 
+      overlays.default = import ./nix/overlay.nix self.packages;
+
       checks = eachSystem (
         system: _pkgs: {
           build = self.packages.${system}.default;
