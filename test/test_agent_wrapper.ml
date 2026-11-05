@@ -50,7 +50,8 @@ let environment entries =
 
 let source file : Config.environment_source = {file}
 
-let sandbox arguments : Config.sandbox = {bubblewrap= Some {arguments}}
+let sandbox ?(extra_arguments = []) arguments : Config.sandbox =
+  {bubblewrap= Some {arguments; extra_arguments}}
 
 let sh =
   System.look_path
@@ -89,6 +90,10 @@ check_environment = true
 allowed_working_directory_prefixes = [ "/git", "$HOME" ]
 [sandbox.bubblewrap]
 arguments = ["--bind", "$HOME", "$HOME", "--unshare-all"]
+[sandbox.bubblewrap.extra_arguments]
+pi = ["--bind-try", "$HOME/.pi", "$HOME/.pi"]
+claude = []
+"with space" = ["flag"]
 [environment]
 CMD_API_KEY = { file = "/run/ageism/commandcode-api-key" }
 "with space" = { file = 'literal\path' }
@@ -102,7 +107,12 @@ file = "nested"
       equal ["/git"; "$HOME"]
         config.preconditions.allowed_working_directory_prefixes ;
       equal
-        (sandbox ["--bind"; "$HOME"; "$HOME"; "--unshare-all"])
+        (sandbox
+           ~extra_arguments:
+             [ ("pi", ["--bind-try"; "$HOME/.pi"; "$HOME/.pi"])
+             ; ("claude", [])
+             ; ("with space", ["flag"]) ]
+           ["--bind"; "$HOME"; "$HOME"; "--unshare-all"] )
         config.sandbox ;
       equal "/run/ageism/commandcode-api-key"
         (List.assoc "CMD_API_KEY" config.environment).file ;
@@ -134,6 +144,9 @@ file = "nested"
         ; "sandbox = false"
         ; "[sandbox]\nbubblewrap = false"
         ; "[sandbox.bubblewrap]\narguments = 'bad'"
+        ; "[sandbox.bubblewrap]\nextra_arguments = 'bad'"
+        ; "[sandbox.bubblewrap]\nextra_arguments = { pi = 'bad' }"
+        ; "[sandbox.bubblewrap]\nextra_arguments = { pi = [1] }"
         ; "environment = []"
         ; "[environment]\nTOKEN = 'bad'"
         ; "[environment]\nTOKEN = { file = 1 }" ] ;
@@ -304,6 +317,26 @@ let test_sandbox () =
           ; "claude"
           ; "--verbose" ]
           (Sandbox.build_argv config env "claude" ["--verbose"]) ;
+        let extra =
+          sandbox
+            ~extra_arguments:
+              [("claude", ["--ro-bind"; "$HOME/.claude"]); ("pi", ["--pi"])]
+            ["--unshare-all"]
+        in
+        equal
+          [ bwrap
+          ; "--unshare-all"
+          ; "--ro-bind"
+          ; "/home/user/.claude"
+          ; "claude"
+          ; "--verbose" ]
+          (Sandbox.build_argv extra env "claude" ["--verbose"]) ;
+        equal
+          [bwrap; "--unshare-all"; "--pi"; "/usr/bin/pi"; "--flag"]
+          (Sandbox.build_argv extra env "/usr/bin/pi" ["--flag"]) ;
+        equal
+          [bwrap; "--unshare-all"; "other"; "--flag"]
+          (Sandbox.build_argv extra env "other" ["--flag"]) ;
         expect_error ~message:"bwrap was configured but is not available"
           (fun () ->
             Sandbox.build_argv config

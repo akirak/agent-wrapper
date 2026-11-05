@@ -1,7 +1,8 @@
 type preconditions =
   {check_environment: bool; allowed_working_directory_prefixes: string list}
 
-type bubblewrap = {arguments: string list}
+type bubblewrap =
+  {arguments: string list; extra_arguments: (string * string list) list}
 
 type sandbox = {bubblewrap: bubblewrap option}
 
@@ -50,6 +51,16 @@ let decode root =
     | Some (TomlString value) -> value
     | Some _ -> System.fail "%s must be a string" name
   in
+  let extra_arguments parent name =
+    match find parent name with
+    | None -> []
+    | Some (TomlTable entries | TomlInlineTable entries) ->
+        List.map
+          (fun (executable, values) ->
+            (executable, strings [(executable, values)] executable) )
+          entries
+    | Some _ -> System.fail "%s must be a table of arrays of strings" name
+  in
   let root = table "config" root in
   let preconditions = subtable root "preconditions" in
   let sandbox = subtable root "sandbox" in
@@ -61,8 +72,9 @@ let decode root =
       { bubblewrap=
           Option.map
             (fun value ->
-              { arguments=
-                  strings (table "sandbox.bubblewrap" value) "arguments" } )
+              let table = table "sandbox.bubblewrap" value in
+              { arguments= strings table "arguments"
+              ; extra_arguments= extra_arguments table "extra_arguments" } )
             (find sandbox "bubblewrap") }
   ; environment=
       subtable root "environment"

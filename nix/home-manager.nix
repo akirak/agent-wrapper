@@ -63,6 +63,24 @@ in
                     expand to an empty string; no shell evaluation is performed.
                   '';
                 };
+
+                options.extra_arguments = lib.mkOption {
+                  type = lib.types.attrsOf (lib.types.listOf lib.types.str);
+                  default = { };
+                  example = {
+                    pi = [
+                      "--bind-try"
+                      "$HOME/.pi"
+                      "$HOME/.pi"
+                    ];
+                  };
+                  description = ''
+                    Extra arguments passed to Bubblewrap when the wrapped
+                    command's executable name (without directory) matches the
+                    attribute name. Appended after the regular arguments and
+                    subject to the same environment variable expansion.
+                  '';
+                };
               }
             );
             default = null;

@@ -154,6 +154,8 @@ allowed_working_directory_prefixes = ["/git"]
 
 [sandbox.bubblewrap]
 arguments = ["--bind", "$HOME", "$HOME", "--unshare-all"]
+[sandbox.bubblewrap.extra_arguments]
+pi = ["--bind-try", "$HOME/.pi", "$HOME/.pi"]
 
 [environment]
 CMD_API_KEY = { file = "/run/ageism/commandcode-api-key" }
@@ -194,14 +196,16 @@ OPENAI_API_KEY = { file = "/run/secrets/openai-api-key" }
 When the `[sandbox.bubblewrap]` section is present, `agent-wrapper` executes the target command inside [Bubblewrap](https://github.com/containers/bubblewrap):
 
 ```bash
-bwrap [ARGUMENTS...] COMMAND [ARGS...]
+bwrap [ARGUMENTS...] [EXTRA_ARGUMENTS...] COMMAND [ARGS...]
 ```
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
 | `arguments` | array of strings | `[]` | Command-line arguments passed to `bwrap` before `COMMAND`. |
+| `extra_arguments` | table of arrays of strings | `{}` | Additional arguments appended after `arguments` for specific executables. Keys are executable names (without directory); values are arrays of argument strings. |
 
-- **Environment variable expansion:** Environment variables anywhere in `arguments` (for example, `"$HOME/.config/direnv"`, `"${XDG_RUNTIME_DIR}/bus"`, or `"--chdir=$HOME"`) are expanded against the command environment before `bwrap` is invoked. Both `$NAME` and `${NAME}` references are supported; unset variables expand to an empty string. This is variable substitution only, not shell evaluation or word splitting: each string remains one argument, even if an expanded value contains spaces. Variables defined in `[environment]` are loaded prior to this expansion.
+- **Environment variable expansion:** Environment variables anywhere in `arguments` and `extra_arguments` (for example, `"$HOME/.config/direnv"`, `"${XDG_RUNTIME_DIR}/bus"`, or `"--chdir=$HOME"`) are expanded against the command environment before `bwrap` is invoked. Both `$NAME` and `${NAME}` references are supported; unset variables expand to an empty string. This is variable substitution only, not shell evaluation or word splitting: each string remains one argument, even if an expanded value contains spaces. Variables defined in `[environment]` are loaded prior to this expansion.
+- **Per-executable extra arguments:** `extra_arguments` keys match the executable name without its directory (for example, `pi` matches both `pi` and `/usr/bin/pi`); matching is exact and case-sensitive, so a key named `pi` matches `pi` and `/usr/bin/pi` but not `pi2`.
 - **Disabling the sandbox:** Omit the `[sandbox.bubblewrap]` section entirely to run the command directly without Bubblewrap.
 - **Other Unix-like platforms:** On Unix-like operating systems other than Linux, `[sandbox.bubblewrap]` is ignored with a warning to `stderr`, and the command is executed without a sandbox.
 

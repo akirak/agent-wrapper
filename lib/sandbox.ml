@@ -18,7 +18,15 @@ let build_argv (config : Config.sandbox) environment command args =
         with System.Error message ->
           System.fail "bwrap was configured but is not available: %s" message
       in
-      let arguments =
-        List.map (Environment.expand environment) bubblewrap.arguments
+      let expand = List.map (Environment.expand environment) in
+      let extra =
+        match
+          List.assoc_opt
+            (Filename.basename command)
+            bubblewrap.extra_arguments
+        with
+        | Some arguments -> expand arguments
+        | None -> []
       in
-      bwrap :: (arguments @ (command :: args))
+      let arguments = expand bubblewrap.arguments in
+      bwrap :: (arguments @ extra @ (command :: args))
