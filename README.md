@@ -90,6 +90,12 @@ Wrapper options must appear before `COMMAND`. Everything after `COMMAND`,
 including flags such as `--help` and `-f`, is forwarded unchanged. Use `--`
 before `COMMAND` if its name begins with `-`.
 
+Some arguments are treated as *pass-through* arguments: when the target
+command receives one of them (by default `--help` or `--version`),
+`agent-wrapper` skips both the precondition checks and sandboxing and runs the
+command directly. The wrapper's own `--help` before `COMMAND` still displays
+`agent-wrapper`'s help.
+
 ### Examples
 
 Run a coding agent using the default configuration file:
@@ -148,6 +154,9 @@ By default, configuration is read from `$XDG_CONFIG_HOME/agent-wrapper/config.to
 ### Example `config.toml`
 
 ```toml
+[pass_through]
+claude = ["--help", "--version", "-V"]
+
 [preconditions]
 check_environment = true
 allowed_working_directory_prefixes = ["/git"]
@@ -160,6 +169,28 @@ pi = ["--bind-try", "$HOME/.pi", "$HOME/.pi"]
 [environment]
 CMD_API_KEY = { file = "/run/ageism/commandcode-api-key" }
 ```
+
+### `[pass_through]`
+
+Defines arguments that make `agent-wrapper` skip precondition checks and
+sandboxing for a target command, for example when the user only wants to see
+help or version information.
+
+```toml
+[pass_through]
+claude = ["--help", "--version", "-V"]
+```
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
+| `arguments` | array of strings | `["--help", "--version"]` | Pass-through arguments for executables without a per-executable override. |
+| *executable* | array of strings | none | Replaces `arguments` for the executable with the same name (without directory). An empty array disables pass-through for that executable. |
+
+Matching is exact and case-sensitive against each argument passed to the target
+command. Executable keys are matched by basename, so `claude` applies to both
+`claude` and `/usr/bin/claude`. The wrapper's own options must still appear
+before `COMMAND`; for example, `agent-wrapper --help` shows the wrapper's help,
+whereas `agent-wrapper claude --help` runs `claude --help` directly.
 
 ### `[preconditions]`
 

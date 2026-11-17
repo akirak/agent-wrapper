@@ -53,6 +53,10 @@ let source file : Config.environment_source = {file}
 let sandbox ?(extra_arguments = []) arguments : Config.sandbox =
   {bubblewrap= Some {arguments; extra_arguments}}
 
+let pass_through ?(arguments = Config.default_pass_through_arguments)
+    extra_arguments : Config.pass_through =
+  {arguments; extra_arguments}
+
 let sh =
   System.look_path
     ~path:(Environment.get (Environment.current ()) "PATH")
@@ -94,6 +98,10 @@ arguments = ["--bind", "$HOME", "$HOME", "--unshare-all"]
 pi = ["--bind-try", "$HOME/.pi", "$HOME/.pi"]
 claude = []
 "with space" = ["flag"]
+[pass_through]
+claude = ["--help", "--version", "-V"]
+"with space" = []
+
 [environment]
 CMD_API_KEY = { file = "/run/ageism/commandcode-api-key" }
 "with space" = { file = 'literal\path' }
@@ -114,6 +122,10 @@ file = "nested"
              ; ("with space", ["flag"]) ]
            ["--bind"; "$HOME"; "$HOME"; "--unshare-all"] )
         config.sandbox ;
+      equal
+        (pass_through
+           [("claude", ["--help"; "--version"; "-V"]); ("with space", [])] )
+        config.pass_through ;
       equal "/run/ageism/commandcode-api-key"
         (List.assoc "CMD_API_KEY" config.environment).file ;
       equal "literal\\path" (List.assoc "with space" config.environment).file ;
@@ -124,6 +136,7 @@ file = "nested"
       equal Config.empty_preconditions config.preconditions ;
       equal Config.empty_sandbox config.sandbox ;
       equal [] config.environment ;
+      equal Config.empty_pass_through config.pass_through ;
       write path "[preconditions]\ncheck_environment = false\n" ;
       equal None (Config.load path).sandbox.bubblewrap ;
       write path "[sandbox.bubblewrap]\n" ;
@@ -147,6 +160,11 @@ file = "nested"
         ; "[sandbox.bubblewrap]\nextra_arguments = 'bad'"
         ; "[sandbox.bubblewrap]\nextra_arguments = { pi = 'bad' }"
         ; "[sandbox.bubblewrap]\nextra_arguments = { pi = [1] }"
+        ; "pass_through = false"
+        ; "[pass_through]\narguments = 'bad'"
+        ; "[pass_through]\nclaude = [1]"
+        ; "[pass_through]\nextra_arguments = 'bad'"
+        ; "[pass_through]\nclaude = { arguments = 'bad' }"
         ; "environment = []"
         ; "[environment]\nTOKEN = 'bad'"
         ; "[environment]\nTOKEN = { file = 1 }" ] ;
@@ -354,6 +372,70 @@ let test_sandbox () =
       expect_error (fun () -> System.look_path ~path:dir "bwrap") ;
       expect_error (fun () -> System.look_path ~path:dir dir) )
 
+let test_pass_through () =
+  let config = pass_through [("claude", ["--usage"]); ("pi", [])] in
+  check
+    (Config.should_pass_through Config.empty_pass_through "claude" ["--help"])
+    "default --help was not passed through" ;
+  check
+    (Config.should_pass_through Config.empty_pass_through "claude"
+       ["--version"] )
+    "default --version was not passed through" ;
+  check
+    (not
+       (Config.should_pass_through Config.empty_pass_through "claude"
+          ["--usage"] ) )
+    "unexpected default pass-through argument" ;
+  check
+    (Config.should_pass_through config "claude" ["--usage"])
+    "per-process override was not used" ;
+  check
+    (Config.should_pass_through config "/usr/bin/claude" ["--usage"])
+    "per-process override did not match by basename" ;
+  check
+    (not (Config.should_pass_through config "claude" ["--help"]))
+    "per-process override did not replace the default" ;
+  check
+    (not (Config.should_pass_through config "pi" ["--help"]))
+    "empty per-process override did not disable pass-through" ;
+  check
+    (Config.should_pass_through config "other" ["--version"])
+    "fallback to global default failed" ;
+  let custom = pass_through ~arguments:["--usage"] [] in
+  check
+    (Config.should_pass_through custom "other" ["--usage"])
+    "custom global default was not used" ;
+  check
+    (not (Config.should_pass_through custom "other" ["--help"]))
+    "custom global default did not replace the built-in default" ;
+  with_temp (fun dir ->
+      let path = Filename.concat dir "config.toml" in
+      write path
+        "[pass_through]\narguments = [\"--usage\"]\nclaude = [\"-V\"]\n" ;
+      let config = Config.load path in
+      equal
+        (pass_through ~arguments:["--usage"] [("claude", ["-V"])])
+        config.pass_through ;
+      write path "[pass_through_arguments]\nclaude = [\"-V\"]\n" ;
+      equal
+        (pass_through [("claude", ["-V"])])
+        (Config.load path).pass_through ;
+      write path "pass_through_arguments = [\"--usage\"]\n" ;
+      equal
+        (pass_through ~arguments:["--usage"] [])
+        (Config.load path).pass_through ;
+      write path
+        "pass_through_arguments = [\"--usage\"]\n\
+         [preconditions]\n\
+         pass_through_arguments = [\"--help\"]\n" ;
+      equal
+        (pass_through ~arguments:["--help"] [])
+        (Config.load path).pass_through ;
+      write path "[pass_through.claude]\narguments = [\"-V\"]\n" ;
+      equal
+        (pass_through [("claude", ["-V"])])
+        (Config.load path).pass_through )
+
 let test_default_config_path () =
   equal "/xdg/agent-wrapper/config.toml"
     (Cli.default_config_path
@@ -506,6 +588,30 @@ let test_end_to_end binary () =
           check
             (contains refused.error "AGENTS_ALLOW_RUN")
             "missing precondition error" ;
+          let no_allow =
+            Environment.Variables.remove "AGENTS_ALLOW_RUN" env
+          in
+          write config_path (config ^ "[sandbox.bubblewrap]\n") ;
+          assert_execution ~output:"pass-through" (Unix.WEXITED 0)
+            (run
+               ~env:(Environment.Variables.add "PATH" "" no_allow)
+               ["-f"; config_path; sh; "-c"; "printf pass-through"; "--help"] ) ;
+          write config_path
+            ( config
+            ^ Printf.sprintf "[pass_through]\n%S = [\"--usage\"]\n"
+                (Filename.basename sh) ) ;
+          assert_execution (Unix.WEXITED 1)
+            (run ~env:no_allow
+               [ "-f"
+               ; config_path
+               ; sh
+               ; "-c"
+               ; "printf should-not-run"
+               ; "--help" ] ) ;
+          assert_execution ~output:"usage" (Unix.WEXITED 0)
+            (run ~env:no_allow
+               ["-f"; config_path; sh; "-c"; "printf usage"; "--usage"] ) ;
+          write config_path config ;
           assert_execution ~output:"e2e-token unset" (Unix.WEXITED 0)
             (wrapped
                [ sh
@@ -652,6 +758,7 @@ let () =
     ; ("file-backed environment", test_environment)
     ; ("environment expansion", test_expansion)
     ; ("sandbox argument construction and executable lookup", test_sandbox)
+    ; ("pass-through arguments", test_pass_through)
     ; ("default configuration path", test_default_config_path)
     ; ("command-line parsing and failures", test_cli)
     ; ("end-to-end execution", test_end_to_end binary) ]

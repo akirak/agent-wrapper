@@ -91,6 +91,25 @@ in
             '';
           };
 
+          pass_through = lib.mkOption {
+            type = lib.types.attrsOf (lib.types.listOf lib.types.str);
+            default = { };
+            example = {
+              claude = [
+                "--help"
+                "--version"
+              ];
+            };
+            description = ''
+              Pass-through arguments keyed by executable name (without
+              directory). If the wrapped command receives one of these
+              arguments, precondition checks and sandboxing are skipped.
+              Executables that are not listed use the default
+              [ "--help" "--version" ]; a listed executable replaces that
+              default.
+            '';
+          };
+
           environment = lib.mkOption {
             type = lib.types.attrsOf (
               lib.types.submodule {

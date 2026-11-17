@@ -93,9 +93,16 @@ let run_command (config_path, command, args) =
       else config_path
     in
     let config = Config.load config_path in
-    Preconditions.check config.preconditions environment ;
+    let pass_through =
+      Config.should_pass_through config.pass_through command args
+    in
+    if not pass_through then
+      Preconditions.check config.preconditions environment ;
     let environment = Environment.apply config.environment environment in
-    let argv = Sandbox.build_argv config.sandbox environment command args in
+    let argv =
+      if pass_through then command :: args
+      else Sandbox.build_argv config.sandbox environment command args
+    in
     try Process.exec environment argv
     with System.Error message -> report message ; 125
   with System.Error message -> report message ; 1
